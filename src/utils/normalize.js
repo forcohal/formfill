@@ -1,192 +1,94 @@
 /**
- * FormFriend — Value Normalization Utilities
- *
- * Converts values to a canonical form for comparison, so that
- * harmless formatting differences don't trigger false mismatch warnings.
- *
- * All functions are pure and local — no network calls.
+ * FormFriend — Normalize Utils
+ * Updated date normalization and formatting.
  */
-
-// eslint-disable-next-line no-var
 var FormFriendNormalize = (function () {
   'use strict';
 
-  /**
-   * General text normalization: trim, collapse whitespace, lowercase.
-   * @param {string} value
-   * @returns {string}
-   */
-  function normalizeText(value) {
-    if (typeof value !== 'string') return '';
-    return value.trim().replace(/\s+/g, ' ').toLowerCase();
+  function normalizeText(str) {
+    if (typeof str !== 'string') return '';
+    return str.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  /**
-   * Name normalization: same as text, but also strips common titles/suffixes.
-   * @param {string} value
-   * @returns {string}
-   */
-  function normalizeName(value) {
-    if (typeof value !== 'string') return '';
-    let name = normalizeText(value);
-    // Remove common prefixes
-    name = name.replace(/^(mr\.?|mrs\.?|ms\.?|dr\.?|prof\.?)\s+/i, '');
-    // Remove trailing periods
-    name = name.replace(/\.$/, '');
-    return name.trim();
+  function normalizeName(name) {
+    let n = normalizeText(name);
+    n = n.replace(/^(mr\.|mrs\.|ms\.|dr\.|prof\.)\s*/, '');
+    return n;
   }
 
-  /**
-   * Phone normalization: strip everything except digits.
-   * Preserves leading country-code digits.
-   * @param {string} value
-   * @returns {string}
-   */
-  function normalizePhone(value) {
-    if (typeof value !== 'string') return '';
-    // Replace leading '+' with nothing (country code digits remain)
-    return value.replace(/[^\d]/g, '');
+  function normalizeEmail(email) {
+    return normalizeText(email);
   }
 
-  /**
-   * Email normalization: trim and lowercase.
-   * @param {string} value
-   * @returns {string}
-   */
-  function normalizeEmail(value) {
-    if (typeof value !== 'string') return '';
-    return value.trim().toLowerCase();
+  function normalizePhone(phone) {
+    if (typeof phone !== 'string') return '';
+    let p = phone.replace(/[^\d+]/g, '');
+    if (p.startsWith('+')) p = p.substring(1);
+    return p;
   }
 
-  /**
-   * Date normalization: attempt to parse various date formats and return
-   * a canonical ISO string (YYYY-MM-DD).
-   *
-   * Supported input formats:
-   *   DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, YYYY/MM/DD,
-   *   MM/DD/YYYY (ambiguous — we prefer DD/MM/YYYY for Indian locale)
-   *
-   * @param {string} value
-   * @returns {string|null}  ISO date string or null if unparseable.
-   */
-  function normalizeDate(value) {
-    if (typeof value !== 'string' || !value.trim()) return null;
-
-    const v = value.trim();
-
-    // Try YYYY-MM-DD or YYYY/MM/DD first (ISO-like)
-    let match = v.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
-    if (match) {
-      const [, year, month, day] = match;
-      return formatISO(year, month, day);
+  function normalizeDate(dateStr) {
+    if (!dateStr) return null;
+    const s = dateStr.trim();
+    if (s.includes('-')) {
+      const parts = s.split('-');
+      if (parts[0].length === 4) return s; // YYYY-MM-DD
+      if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`; // DD-MM-YYYY
     }
-
-    // Try DD/MM/YYYY or DD-MM-YYYY (Indian/European format — preferred)
-    match = v.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
-    if (match) {
-      const [, day, month, year] = match;
-      return formatISO(year, month, day);
+    if (s.includes('/')) {
+      const parts = s.split('/');
+      if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`; // DD/MM/YYYY
     }
-
-    // Try parsing as a native Date (last resort)
-    const d = new Date(v);
-    if (!isNaN(d.getTime())) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
     return null;
   }
 
-  /**
-   * Format year/month/day into YYYY-MM-DD, with zero-padding.
-   */
-  function formatISO(year, month, day) {
-    const y = String(year).padStart(4, '0');
-    const m = String(parseInt(month, 10)).padStart(2, '0');
-    const d = String(parseInt(day, 10)).padStart(2, '0');
-    // Basic validity check
-    const mi = parseInt(m, 10);
-    const di = parseInt(d, 10);
-    if (mi < 1 || mi > 12 || di < 1 || di > 31) return null;
-    return `${y}-${m}-${d}`;
-  }
-
-  /**
-   * Levenshtein distance between two strings.
-   * Used for typo detection (e.g. "Agarwal" vs "Aggarwal").
-   * @param {string} a
-   * @param {string} b
-   * @returns {number}
-   */
   function levenshteinDistance(a, b) {
-    if (typeof a !== 'string') a = '';
-    if (typeof b !== 'string') b = '';
-
-    const m = a.length;
-    const n = b.length;
-
-    // Optimisation: early exits
-    if (m === 0) return n;
-    if (n === 0) return m;
-
-    // Single-row DP
-    let prev = Array.from({ length: n + 1 }, (_, i) => i);
-    let curr = new Array(n + 1);
-
-    for (let i = 1; i <= m; i++) {
-      curr[0] = i;
-      for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        curr[j] = Math.min(
-          prev[j] + 1,       // deletion
-          curr[j - 1] + 1,   // insertion
-          prev[j - 1] + cost  // substitution
-        );
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            Math.min(
+              matrix[i][j - 1] + 1,   // insertion
+              matrix[i - 1][j] + 1    // deletion
+            )
+          );
+        }
       }
-      [prev, curr] = [curr, prev];
     }
-    return prev[n];
+    return matrix[b.length][a.length];
   }
 
-  /**
-   * Compute similarity ratio between two strings (0..1).
-   * 1 = identical, 0 = completely different.
-   * @param {string} a
-   * @param {string} b
-   * @returns {number}
-   */
-  function similarity(a, b) {
-    const na = normalizeText(a);
-    const nb = normalizeText(b);
-    if (na === nb) return 1;
-    const maxLen = Math.max(na.length, nb.length);
-    if (maxLen === 0) return 1;
-    return 1 - levenshteinDistance(na, nb) / maxLen;
+  function similarity(s1, s2) {
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - levenshteinDistance(longer, shorter)) / parseFloat(longer.length);
   }
 
-  /**
-   * Determine the appropriate normalizer for a given profile field.
-   * @param {string} profileField
-   * @returns {Function}
-   */
   function getNormalizer(profileField) {
-    const field = (profileField || '').toLowerCase();
-    if (field.includes('name') || field === 'fullname') return normalizeName;
-    if (field.includes('email') || field === 'email') return normalizeEmail;
-    if (field.includes('phone') || field.includes('mobile') || field === 'phone') return normalizePhone;
-    if (field.includes('date') || field.includes('dob') || field === 'dateofbirth') return normalizeDate;
+    const fieldLower = (profileField || '').toLowerCase();
+    if (fieldLower.includes('name') || fieldLower === 'fullname') return normalizeName;
+    if (fieldLower.includes('email')) return normalizeEmail;
+    if (fieldLower.includes('phone') || fieldLower.includes('mobile')) return normalizePhone;
+    if (fieldLower.includes('date') || fieldLower.includes('dob')) return normalizeDate;
     return normalizeText;
   }
 
-  // Public API
   return {
     normalizeText,
     normalizeName,
-    normalizePhone,
     normalizeEmail,
+    normalizePhone,
     normalizeDate,
     levenshteinDistance,
     similarity,

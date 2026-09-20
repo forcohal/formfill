@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Test 14: Complex Contexts & Exclusions</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background: #fafafa; }
+  h1 { color: #333; font-size: 20px; }
+  form { max-width: 600px; padding: 20px; border: 1px solid #ddd; background: white; border-radius: 8px; }
+  fieldset { margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 4px; }
+  legend { font-weight: bold; color: #4361ee; padding: 0 5px; text-transform: uppercase; font-size: 14px; }
+  div.group { margin-bottom: 15px; }
+  label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; color: #555; }
+  input[type="text"], input[type="email"], input[type="file"], select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  .inline-label { display: inline; font-weight: normal; margin-left: 5px; }
+  button { padding: 10px 15px; background: #4361ee; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  .segmented { display: flex; gap: 10px; }
+  .segmented input { flex: 1; }
+</style>
+</head>
+<body>
+  <h1>Test 14: Complex Contexts & Exclusions</h1>
+  <form>
+    
+    <fieldset><legend>Applicant Details</legend>
+      <div class="group"><label>First Name</label><input type="text"></div>
+      <div class="group"><label>Last Name</label><input type="text"></div>
+    </fieldset>
+
+    <fieldset><legend>Father Information</legend>
+      <div class="group"><label>First Name</label><input type="text"></div>
+      <div class="group"><label>Phone Number</label><input type="text"></div>
+    </fieldset>
+    
+    <fieldset><legend>Mother Details</legend>
+      <div class="group"><label>Name</label><input type="text"></div>
+    </fieldset>
+
+    <fieldset><legend>Spouse Information</legend>
+      <div class="group"><label>Given Name</label><input type="text"></div>
+      <div class="group"><label>Surname</label><input type="text"></div>
+    </fieldset>
+
+    <fieldset><legend>Documents (Do NOT manipulate)</legend>
+      <div class="group"><label>Upload Photograph</label><input type="file" accept="image/*"></div>
+      <div class="group"><label>Upload Passport</label><input type="file"></div>
+    </fieldset>
+
+    <fieldset><legend>Verification (Do NOT manipulate)</legend>
+      <div class="group"><label>Enter Captcha</label><input type="text" id="captcha_input"></div>
+    </fieldset>
+    
+    <button type="submit">Submit Form</button>
+  </form>
+</body>
+</html>

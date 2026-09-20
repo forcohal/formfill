@@ -1,111 +1,51 @@
 /**
- * FormFriend — Profile Storage Module
- *
- * All user PII is stored exclusively in chrome.storage.local.
- * This data NEVER leaves the browser. The backend only receives
- * structural/anonymised form metadata.
- *
- * Profile schema:
- * {
- *   fullName:      string,
- *   email:         string,
- *   phone:         string,
- *   dateOfBirth:   string,
- *   college:       string,
- *   department:    string,
- *   semester:      string
- * }
+ * FormFriend — Profile Storage
+ * Updated to support nested persons (self, father, mother, coApplicant, etc.)
  */
-
-// eslint-disable-next-line no-var
 var FormFriendProfile = (function () {
   'use strict';
-
   const STORAGE_KEY = 'formfriend_profile';
 
-  /**
-   * Save a complete profile (overwrites any existing one).
-   * @param {Object} profile
-   * @returns {Promise<void>}
-   */
-  function saveProfile(profile) {
-    return new Promise((resolve, reject) => {
-      if (!profile || typeof profile !== 'object') {
-        return reject(new Error('Invalid profile object'));
-      }
-      chrome.storage.local.set({ [STORAGE_KEY]: profile }, () => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve();
-        }
-      });
-    });
-  }
-
-  /**
-   * Retrieve the stored profile.
-   * @returns {Promise<Object|null>}  The profile, or null if none exists.
-   */
   function getProfile() {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       chrome.storage.local.get([STORAGE_KEY], (result) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(result[STORAGE_KEY] || null);
+        let p = result[STORAGE_KEY];
+        // Migration: if it's flat, nest it under 'self'
+        if (p && !p.self) {
+          p = { self: p };
         }
+        if (!p) p = { self: {} };
+        resolve(p);
       });
     });
   }
 
-  /**
-   * Merge partial updates into the existing profile.
-   * @param {Object} partial  Key/value pairs to update.
-   * @returns {Promise<Object>}  The merged profile.
-   */
-  async function updateProfile(partial) {
-    if (!partial || typeof partial !== 'object') {
-      throw new Error('Invalid partial profile object');
+  function saveProfile(profile) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [STORAGE_KEY]: profile }, resolve);
+    });
+  }
+
+  async function updateProfile(updatesByPerson) {
+    const p = await getProfile();
+    for (const [person, fields] of Object.entries(updatesByPerson)) {
+      if (!p[person]) p[person] = {};
+      Object.assign(p[person], fields);
     }
-    const existing = (await getProfile()) || {};
-    const merged = { ...existing, ...partial };
-    await saveProfile(merged);
-    return merged;
+    await saveProfile(p);
+    return p;
   }
 
-  /**
-   * Delete the stored profile entirely.
-   * @returns {Promise<void>}
-   */
   function deleteProfile() {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.remove([STORAGE_KEY], () => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve();
-        }
-      });
+    return new Promise((resolve) => {
+      chrome.storage.local.remove([STORAGE_KEY], resolve);
     });
   }
 
-  /**
-   * Check whether a profile exists.
-   * @returns {Promise<boolean>}
-   */
   async function hasProfile() {
-    const profile = await getProfile();
-    return profile !== null;
+    const p = await getProfile();
+    return p && p.self && Object.keys(p.self).length > 0;
   }
 
-  // Public API
-  return {
-    saveProfile,
-    getProfile,
-    updateProfile,
-    deleteProfile,
-    hasProfile,
-    STORAGE_KEY
-  };
+  return { getProfile, saveProfile, updateProfile, deleteProfile, hasProfile };
 })();

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Test 16: Options & URLs</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background: #fafafa; }
+  h1 { color: #333; font-size: 20px; }
+  form { max-width: 600px; padding: 20px; border: 1px solid #ddd; background: white; border-radius: 8px; }
+  fieldset { margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 4px; }
+  legend { font-weight: bold; color: #4361ee; padding: 0 5px; text-transform: uppercase; font-size: 14px; }
+  div.group { margin-bottom: 15px; }
+  label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; color: #555; }
+  input[type="text"], input[type="email"], input[type="file"], select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  .inline-label { display: inline; font-weight: normal; margin-left: 5px; }
+  button { padding: 10px 15px; background: #4361ee; color: white; border: none; border-radius: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>Test 16: Options & URLs</h1>
+  <form>
+    
+<fieldset><legend>Applicant Details</legend>
+  <div class="group">
+    <label>First Name</label>
+    <input type="text" name="firstName">
+  </div>
+  <div class="group">
+    <label>Date of Birth</label>
+    <input type="text" name="dob">
+    <small>No placeholder, format is totally unknown.</small>
+  </div>
+  <div class="group">
+    <label>Education</label>
+    <select name="education">
+      <option value="">Select...</option>
+      <option value="High School">High School</option>
+      <option value="Diploma">Diploma</option>
+      <option value="B.Sc">B.Sc</option>
+      <option value="M.Sc">M.Sc</option>
+      <option value="PhD">PhD</option>
+    </select>
+    <small>Profile might have 'B.Tech' which isn't here.</small>
+  </div>
+</fieldset>
+
+<fieldset><legend>Social & Web Links</legend>
+  <div class="group">
+    <label>LinkedIn URL</label>
+    <input type="text" name="linkedin">
+  </div>
+  <div class="group">
+    <label>GitHub Profile</label>
+    <input type="text" name="github">
+  </div>
+  <div class="group">
+    <label>Personal Website</label>
+    <input type="text" name="website">
+  </div>
+</fieldset>
+
+    <button type="submit">Submit Form</button>
+  </form>
+</body>
+</html>

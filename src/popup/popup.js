@@ -1,12 +1,10 @@
 /**
  * FormFriend — Popup Script
+ * Updated to read/write from profile.self and support structured names.
  */
-
 (function () {
   'use strict';
-
-  const STORAGE_KEY = 'formfriend_profile';
-
+  
   const views = {
     noProfile:    document.getElementById('state-no-profile'),
     profileReady: document.getElementById('state-profile-ready'),
@@ -35,70 +33,46 @@
     }
   }
 
-  function getProfile() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_KEY], (result) => {
-        resolve(result[STORAGE_KEY] || null);
-      });
-    });
-  }
-
-  function saveProfile(profile) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ [STORAGE_KEY]: profile }, resolve);
-    });
-  }
-
-  function deleteProfile() {
-    return new Promise((resolve) => {
-      chrome.storage.local.remove([STORAGE_KEY], resolve);
-    });
-  }
-
   function renderProfileSummary(profile) {
-    if (!profile) return;
+    const self = profile.self || {};
+    if (Object.keys(self).length === 0) return;
     const lines = [];
-    const fullName = [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ');
+    const fullName = [self.firstName, self.middleName, self.lastName].filter(Boolean).join(' ');
     if (fullName) lines.push(`<strong>${fullName}</strong>`);
-    if (profile.email) lines.push(profile.email);
-    if (profile.phone) lines.push(profile.phone);
-    if (profile.college) lines.push(profile.college);
+    if (self.email) lines.push(self.email);
+    if (self.phone) lines.push(self.phone);
+    if (self.college) lines.push(self.college);
     profileSummaryEl.innerHTML = lines.join('<br>');
   }
 
   function populateForm(profile) {
+    const self = profile.self || {};
     dynamicFieldsContainer.innerHTML = '';
     
-    // Standard fields
     for (const field of STANDARD_FIELDS) {
       const input = document.getElementById(`pf-${field}`);
-      if (input && profile[field] !== undefined) {
+      if (input && self[field] !== undefined) {
         if (input.type === 'checkbox') {
-          input.checked = profile[field] === true || profile[field] === 'true' || profile[field] === 'yes';
+          input.checked = self[field] === true || self[field] === 'true' || self[field] === 'yes';
         } else {
-          input.value = profile[field];
+          input.value = self[field];
         }
       }
     }
 
-    // Dynamic fields
-    for (const [key, value] of Object.entries(profile)) {
+    for (const [key, value] of Object.entries(self)) {
       if (!STANDARD_FIELDS.includes(key) && key !== 'fullName') {
         const div = document.createElement('div');
         div.className = 'ff-form-group';
-        
         const label = document.createElement('label');
         label.htmlFor = `pf-dyn-${key}`;
-        // Convert camelCase to Title Case
         label.textContent = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-        
         const input = document.createElement('input');
         input.type = 'text';
         input.id = `pf-dyn-${key}`;
         input.dataset.key = key;
         input.value = value;
         input.className = 'dynamic-field';
-        
         div.appendChild(label);
         div.appendChild(input);
         dynamicFieldsContainer.appendChild(div);
@@ -107,22 +81,19 @@
   }
 
   function readForm() {
-    const profile = {};
+    const self = {};
     for (const field of STANDARD_FIELDS) {
       const input = document.getElementById(`pf-${field}`);
       if (input) {
-        if (input.type === 'checkbox') {
-          profile[field] = input.checked;
-        } else {
-          profile[field] = input.value.trim();
-        }
+        if (input.type === 'checkbox') self[field] = input.checked;
+        else self[field] = input.value.trim();
       }
     }
     const dynamicInputs = document.querySelectorAll('.dynamic-field');
     for (const input of dynamicInputs) {
-      profile[input.dataset.key] = input.value.trim();
+      self[input.dataset.key] = input.value.trim();
     }
-    return profile;
+    return { self };
   }
 
   function clearForm() {
@@ -145,33 +116,18 @@
   }
 
   async function init() {
-    const profile = await getProfile();
-
-    if (!profile) {
+    const hasProfile = await FormFriendProfile.hasProfile();
+    if (!hasProfile) {
       showView('noProfile');
       return;
     }
-
+    const profile = await FormFriendProfile.getProfile();
     try {
       const tabState = await sendToContentScript({ type: 'GET_TAB_STATE' });
-      switch (tabState.status) {
-        case 'scanning':
-          showView('scanning');
-          return;
-        case 'mapped':
-          fieldCountEl.textContent = tabState.fieldCount || '?';
-          showView('mapped');
-          return;
-        case 'filled':
-          showView('filled');
-          return;
-        case 'mismatch':
-          mismatchCountEl.textContent = tabState.mismatches ? tabState.mismatches.length : '?';
-          showView('mismatch');
-          return;
-      }
+      if (tabState.status === 'scanning') { showView('scanning'); return; }
+      if (tabState.status === 'mapped') { fieldCountEl.textContent = tabState.fieldCount || '?'; showView('mapped'); return; }
+      if (tabState.status === 'filled') { showView('filled'); return; }
     } catch (e) {}
-
     renderProfileSummary(profile);
     showView('profileReady');
   }
@@ -183,16 +139,16 @@
   });
 
   document.getElementById('btn-edit-profile').addEventListener('click', async () => {
-    const profile = await getProfile();
-    if (profile) populateForm(profile);
+    const profile = await FormFriendProfile.getProfile();
+    populateForm(profile);
     document.getElementById('btn-delete-profile').hidden = false;
     showView('profileForm');
   });
 
   document.getElementById('btn-cancel-profile').addEventListener('click', async () => {
-    const profile = await getProfile();
-    if (profile) {
-      renderProfileSummary(profile);
+    const hasProfile = await FormFriendProfile.hasProfile();
+    if (hasProfile) {
+      renderProfileSummary(await FormFriendProfile.getProfile());
       showView('profileReady');
     } else {
       showView('noProfile');
@@ -202,18 +158,18 @@
   profileFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     const profile = readForm();
-    if (!profile.firstName || !profile.lastName || !profile.email) {
+    if (!profile.self.firstName || !profile.self.lastName || !profile.self.email) {
       alert('First Name, Last Name, and email are required.');
       return;
     }
-    await saveProfile(profile);
+    await FormFriendProfile.saveProfile(profile);
     renderProfileSummary(profile);
     showView('profileReady');
   });
 
   document.getElementById('btn-delete-profile').addEventListener('click', async () => {
     if (confirm('Delete your FormFriend profile?')) {
-      await deleteProfile();
+      await FormFriendProfile.deleteProfile();
       clearForm();
       showView('noProfile');
     }
@@ -239,40 +195,9 @@
     window.close();
   });
 
-  document.getElementById('btn-check-mismatches').addEventListener('click', async () => {
-    const response = await sendToContentScript({ type: 'CHECK_MISMATCHES' });
-    if (response && response.mismatches && response.mismatches.length > 0) {
-      mismatchCountEl.textContent = response.mismatches.length;
-      showView('mismatch');
-    } else {
-      alert('No mismatches found! ✓');
-    }
-  });
-
-  document.getElementById('btn-review-mismatches').addEventListener('click', async () => {
-    await sendToContentScript({ type: 'CHECK_MISMATCHES' });
-    window.close();
-  });
-
   document.getElementById('btn-reset').addEventListener('click', async () => {
     await sendToContentScript({ type: 'RESET_STATE' });
-    const profile = await getProfile();
-    if (profile) {
-      renderProfileSummary(profile);
-      showView('profileReady');
-    } else {
-      showView('noProfile');
-    }
-  });
-
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'STATE_UPDATE') {
-      if (message.status === 'filled') showView('filled');
-      if (message.status === 'mismatch') {
-        mismatchCountEl.textContent = message.count || '?';
-        showView('mismatch');
-      }
-    }
+    init();
   });
 
   init();
